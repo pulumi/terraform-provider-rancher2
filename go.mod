@@ -1,4 +1,4 @@
-module github.com/terraform-providers/terraform-provider-rancher2
+module github.com/rancher/terraform-provider-rancher2
 
 go 1.13
 

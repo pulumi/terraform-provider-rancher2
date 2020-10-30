@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
@@ -47,6 +48,16 @@ func resourceRancher2BootstrapCreate(d *schema.ResourceData, meta interface{}) e
 	err = meta.(*Config).SetSetting(bootstrapSettingTelemetry, telemetry)
 	if err != nil {
 		return err
+	}
+
+	// Set ui default landing option for rancher up to 2.5.0
+	if ok, _ := meta.(*Config).IsRancherVersionGreaterThanOrEqual(rancher2UILandingVersion); ok {
+		uiLanding := d.Get("ui_default_landing").(string)
+
+		err = meta.(*Config).SetSetting(bootstrapSettingUILanding, uiLanding)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Generate a new token
@@ -248,7 +259,17 @@ func bootstrapDoLogin(d *schema.ResourceData, meta interface{}) error {
 	}
 	tokenID, token, err := DoUserLogin(meta.(*Config).URL, bootstrapDefaultUser, currentPass, bootstrapDefaultTTL, bootstrapDefaultSessionDesc, meta.(*Config).CACerts, meta.(*Config).Insecure)
 	if err != nil {
-		return fmt.Errorf("[ERROR] Login with %s user: %v", bootstrapDefaultUser, err)
+		// 3 login retries waiting 5 seconds if user/pass login fails
+		for i := 0; i < 3; i++ {
+			time.Sleep(5 * time.Second)
+			tokenID, token, err = DoUserLogin(meta.(*Config).URL, bootstrapDefaultUser, currentPass, bootstrapDefaultTTL, bootstrapDefaultSessionDesc, meta.(*Config).CACerts, meta.(*Config).Insecure)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("[ERROR] Login with %s user: %v", bootstrapDefaultUser, err)
+		}
 	}
 
 	// Update config token

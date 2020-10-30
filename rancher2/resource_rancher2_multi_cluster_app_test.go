@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/terraform"
-	managementClient "github.com/rancher/types/client/management/v3"
+	managementClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 )
 
 const (
@@ -104,6 +104,8 @@ func TestAccRancher2MultiClusterApp_basic(t *testing.T) {
 func TestAccRancher2MultiClusterApp_disappears(t *testing.T) {
 	var app *managementClient.MultiClusterApp
 
+	time.Sleep(5 * time.Second)
+
 	resource.Test(t, resource.TestCase{
 		Providers:    testAccProviders,
 		CheckDestroy: testAccCheckRancher2MultiClusterAppDestroy,
@@ -159,6 +161,7 @@ func testAccRancher2MultiClusterAppDisappears(mca *managementClient.MultiCluster
 				return fmt.Errorf(
 					"[ERROR] waiting for multi cluster app (%s) to be removed: %s", rs.Primary.ID, waitErr)
 			}
+			time.Sleep(5 * time.Second)
 		}
 		return nil
 	}

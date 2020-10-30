@@ -10,27 +10,34 @@ import (
 	"github.com/hashicorp/go-version"
 	"github.com/rancher/norman/clientbase"
 	"github.com/rancher/norman/types"
-	clusterClient "github.com/rancher/types/client/cluster/v3"
-	managementClient "github.com/rancher/types/client/management/v3"
-	projectClient "github.com/rancher/types/client/project/v3"
+	types2 "github.com/rancher/rancher/pkg/api/steve/catalog/types"
+	clusterClient "github.com/rancher/rancher/pkg/client/generated/cluster/v3"
+	managementClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
+	projectClient "github.com/rancher/rancher/pkg/client/generated/project/v3"
 	"golang.org/x/crypto/bcrypt"
 )
 
 const (
+	rancher2ClientAPIVersion          = "/v3"
+	rancher2CatalogAPIVersion         = "/v1"
+	rancher2CatalogTypePrefix         = "catalog.cattle.io"
+	rancher2ManagementV2TypePrefix    = "management.cattle.io"
 	rancher2ReadyAnswer               = "pong"
 	rancher2RetriesWait               = 5
 	rancher2RKEK8sSystemImageVersion  = "2.3.0"
 	rancher2NodeTemplateChangeVersion = "2.3.3" // Change node template id format
 	rancher2TokeTTLMinutesVersion     = "2.4.6" // ttl token is readed in minutes
 	rancher2TokeTTLMilisVersion       = "2.4.7" // ttl token is readed in miliseconds
+	rancher2UILandingVersion          = "2.5.0" // ui landing option
 	rancher2NodeTemplateNewPrefix     = "cattle-global-nt:nt-"
 )
 
 // Client are the client kind for a Rancher v3 API
 type Client struct {
 	Management *managementClient.Client
-	Cluster    *clusterClient.Client
-	Project    *projectClient.Client
+	CatalogV2  map[string]*clientbase.APIBaseClient
+	Cluster    map[string]*clusterClient.Client
+	Project    map[string]*projectClient.Client
 }
 
 // Config is the configuration parameters for a Rancher v3 API
@@ -122,7 +129,7 @@ func (c *Config) getK8SVersions() ([]string, error) {
 		return nil, nil
 	}
 
-	RKEK8sSystemImageCollection, err := c.Client.Management.RKEK8sSystemImage.ListAll(NewListOpts(nil))
+	RKEK8sSystemImageCollection, err := c.Client.Management.RkeK8sSystemImage.ListAll(NewListOpts(nil))
 	if err != nil {
 		return nil, fmt.Errorf("[ERROR] Listing RKE K8s System Images: %s", err)
 	}
@@ -203,22 +210,9 @@ func (c *Config) UpdateToken(token string) error {
 	if err != nil {
 		return err
 	}
-
-	if c.Client.Cluster != nil {
-		c.Client.Cluster = nil
-		_, err := c.ClusterClient(c.ClusterID)
-		if err != nil {
-			return err
-		}
-
-	}
-	if c.Client.Project != nil {
-		c.Client.Project = nil
-		_, err := c.ProjectClient(c.ProjectID)
-		if err != nil {
-			return err
-		}
-	}
+	c.Client.Cluster = map[string]*clusterClient.Client{}
+	c.Client.Project = map[string]*projectClient.Client{}
+	c.Client.CatalogV2 = map[string]*clientbase.APIBaseClient{}
 
 	return nil
 }
@@ -239,6 +233,7 @@ func (c *Config) ManagementClient() (*managementClient.Client, error) {
 
 	// Setup the management client
 	options := c.CreateClientOpts()
+	options.URL = options.URL + rancher2ClientAPIVersion
 	mClient, err := managementClient.NewClient(options)
 	if err != nil {
 		return nil, err
@@ -257,17 +252,21 @@ func (c *Config) ManagementClient() (*managementClient.Client, error) {
 	return c.Client.Management, nil
 }
 
-// ClusterClient creates a Rancher client scoped to a Cluster API
-func (c *Config) ClusterClient(id string) (*clusterClient.Client, error) {
+// CatalogV2Client creates a Rancher client scoped to a Cluster API
+func (c *Config) CatalogV2Client(id string) (*clientbase.APIBaseClient, error) {
+	if id == "" {
+		return nil, fmt.Errorf("[ERROR] Rancher Catalog V2 Client: cluster ID is nil")
+	}
+
 	c.Sync.Lock()
 	defer c.Sync.Unlock()
 
-	if id == "" {
-		return nil, fmt.Errorf("[ERROR] Rancher Cluster Client: cluster ID is nil")
+	if c.Client.CatalogV2 == nil {
+		c.Client.CatalogV2 = map[string]*clientbase.APIBaseClient{}
 	}
 
-	if c.Client.Cluster != nil && id == c.ClusterID {
-		return c.Client.Cluster, nil
+	if c.Client.CatalogV2[id] != nil {
+		return c.Client.CatalogV2[id], nil
 	}
 
 	err := c.isRancherReady()
@@ -277,28 +276,64 @@ func (c *Config) ClusterClient(id string) (*clusterClient.Client, error) {
 
 	// Setup the cluster client
 	options := c.CreateClientOpts()
-	options.URL = options.URL + "/clusters/" + id
+	options.URL = options.URL + "/k8s/clusters/" + id + rancher2CatalogAPIVersion
+	cli, err := clientbase.NewAPIClient(options)
+	if err != nil {
+		return nil, err
+	}
+	c.Client.CatalogV2[id] = &cli
+	return c.Client.CatalogV2[id], err
+}
+
+// ClusterClient creates a Rancher client scoped to a Cluster API
+func (c *Config) ClusterClient(id string) (*clusterClient.Client, error) {
+	if id == "" {
+		return nil, fmt.Errorf("[ERROR] Rancher Cluster Client: cluster ID is nil")
+	}
+
+	c.Sync.Lock()
+	defer c.Sync.Unlock()
+
+	if c.Client.Cluster == nil {
+		c.Client.Cluster = map[string]*clusterClient.Client{}
+	}
+
+	if c.Client.Cluster[id] != nil {
+		return c.Client.Cluster[id], nil
+	}
+
+	err := c.isRancherReady()
+	if err != nil {
+		return nil, err
+	}
+
+	// Setup the cluster client
+	options := c.CreateClientOpts()
+	options.URL = options.URL + rancher2ClientAPIVersion + "/clusters/" + id
 	cClient, err := clusterClient.NewClient(options)
 	if err != nil {
 		return nil, err
 	}
-	c.Client.Cluster = cClient
-	c.ClusterID = id
+	c.Client.Cluster[id] = cClient
 
-	return c.Client.Cluster, nil
+	return c.Client.Cluster[id], nil
 }
 
 // ProjectClient creates a Rancher client scoped to a Project API
 func (c *Config) ProjectClient(id string) (*projectClient.Client, error) {
-	c.Sync.Lock()
-	defer c.Sync.Unlock()
-
 	if id == "" {
 		return nil, fmt.Errorf("[ERROR] Rancher Project Client: project ID is nil")
 	}
 
-	if c.Client.Project != nil && id == c.ProjectID {
-		return c.Client.Project, nil
+	c.Sync.Lock()
+	defer c.Sync.Unlock()
+
+	if c.Client.Project == nil {
+		c.Client.Project = map[string]*projectClient.Client{}
+	}
+
+	if c.Client.Project[id] != nil {
+		return c.Client.Project[id], nil
 	}
 
 	err := c.isRancherReady()
@@ -308,16 +343,15 @@ func (c *Config) ProjectClient(id string) (*projectClient.Client, error) {
 
 	// Setup the project client
 	options := c.CreateClientOpts()
-	options.URL = options.URL + "/projects/" + id
+	options.URL = options.URL + rancher2ClientAPIVersion + "/projects/" + id
 	pClient, err := projectClient.NewClient(options)
 	if err != nil {
 		return nil, err
 	}
 
-	c.Client.Project = pClient
-	c.ProjectID = id
+	c.Client.Project[id] = pClient
 
-	return c.Client.Project, nil
+	return c.Client.Project[id], nil
 }
 
 func (c *Config) NormalizeURL() {
@@ -333,7 +367,6 @@ func (c *Config) CreateClientOpts() *clientbase.ClientOpts {
 		CACerts:  c.CACerts,
 		Insecure: c.Insecure,
 	}
-
 	return options
 }
 
@@ -611,6 +644,217 @@ func (c *Config) GetClusterByID(id string) (*managementClient.Cluster, error) {
 	}
 
 	return client.Cluster.ByID(id)
+}
+
+func (c *Config) GetSettingV2ByID(clusterID, id string) (*SettingV2, error) {
+	if id == "" {
+		return nil, fmt.Errorf("Setting V2 id is nil")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	resp := &SettingV2{}
+	err = client.ByID(settingV2APIType, id, resp)
+
+	return resp, err
+}
+
+func (c *Config) GetCatalogV2ByID(clusterID, id string) (*ClusterRepo, error) {
+	if id == "" {
+		return nil, fmt.Errorf("Catalog V2 id is nil")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	resp := &ClusterRepo{}
+	err = client.ByID(catalogV2APIType, id, resp)
+
+	return resp, err
+}
+
+func (c *Config) CreateCatalogV2(clusterID string, repo *ClusterRepo) (*ClusterRepo, error) {
+	if repo == nil {
+		return nil, fmt.Errorf("Catalog V2 id is nil")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	resp := &ClusterRepo{}
+	err = client.Create(catalogV2APIType, repo, resp)
+	return resp, err
+}
+
+func (c *Config) DeleteCatalogV2(clusterID string, repo *ClusterRepo) error {
+	if repo == nil {
+		return fmt.Errorf("Catalog V2 id is nil")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return err
+	}
+	resource := &types.Resource{
+		ID:      repo.ID,
+		Type:    repo.Type,
+		Links:   repo.Links,
+		Actions: repo.Actions,
+	}
+	return client.Delete(resource)
+}
+
+func (c *Config) UpdateCatalogV2(clusterID, id string, update *ClusterRepo) (*ClusterRepo, error) {
+	if id == "" || update == nil {
+		return nil, fmt.Errorf("Catalog V2 id is nil")
+	}
+
+	repo, err := c.GetCatalogV2ByID(clusterID, id)
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	resource := &types.Resource{
+		ID:      repo.ID,
+		Type:    repo.Type,
+		Links:   repo.Links,
+		Actions: repo.Actions,
+	}
+	resp := &ClusterRepo{}
+	err = client.Update(catalogV2APIType, resource, update, resp)
+	return resp, err
+}
+
+func (c *Config) GetAppV2ByID(clusterID, id string) (*AppV2, error) {
+	if id == "" {
+		return nil, fmt.Errorf("App V2 id is nil")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	resp := &AppV2{}
+	err = client.ByID(appV2APIType, id, resp)
+
+	return resp, err
+}
+
+func (c *Config) GetAppV2OperationByID(clusterID, id string) (map[string]interface{}, error) {
+	if id == "" {
+		return nil, fmt.Errorf("App V2 operation id is nil")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	resp := map[string]interface{}{}
+	err = client.ByID(appV2OperationAPIType, id, &resp)
+
+	return resp, err
+}
+
+func (c *Config) DeleteAppV2(clusterID string, app *AppV2) error {
+	if app == nil {
+		return fmt.Errorf("App V2 id is nil")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return err
+	}
+	resource := &types.Resource{
+		ID:      app.ID,
+		Type:    app.Type,
+		Links:   app.Links,
+		Actions: app.Actions,
+	}
+	var resp interface{}
+	return client.Action(appV2APIType, "uninstall", resource, map[string]interface{}{}, resp)
+}
+
+func (c *Config) InfoAppV2(clusterID, repoName, chartName, chartVersion string) (*ClusterRepo, *types2.ChartInfo, error) {
+	if repoName == "" || chartName == "" || chartVersion == "" {
+		return nil, nil, fmt.Errorf("Catalog V2 id, chart name and chart version should be provided")
+	}
+	repo, err := c.GetCatalogV2ByID(clusterID, repoName)
+	if err != nil {
+		return nil, nil, err
+	}
+	resource := types.Resource{
+		ID:      repo.ID,
+		Type:    repo.Type,
+		Links:   repo.Links,
+		Actions: repo.Actions,
+	}
+	link := "info"
+	if resource.Links == nil && len(resource.Links[link]) == 0 {
+		return nil, nil, fmt.Errorf("failed to get chart info %s:%s from catalog v2 %s", chartName, chartVersion, repoName)
+	}
+	resource.Links[link] = resource.Links[link] + "&chartName=" + chartName + "&version=" + chartVersion
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, nil, err
+	}
+	resp := &types2.ChartInfo{}
+	err = client.GetLink(resource, link, resp)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get chart info %s:%s from catalog v2 %s: %v", chartName, chartVersion, repoName, err)
+	}
+	return repo, resp, nil
+}
+
+func (c *Config) InstallAppV2(clusterID string, repo *ClusterRepo, chartIntall *types2.ChartInstallAction) (*types2.ChartActionOutput, error) {
+	if repo == nil || chartIntall == nil {
+		return nil, fmt.Errorf("Catalog V2 id and chartIntall should be provided")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	resource := &types.Resource{
+		ID:      repo.ID,
+		Type:    repo.Type,
+		Links:   repo.Links,
+		Actions: repo.Actions,
+	}
+	resp := &types2.ChartActionOutput{}
+	err = client.Action(catalogV2APIType, "install", resource, chartIntall, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to install app v2: %v", err)
+	}
+	return resp, nil
+}
+
+func (c *Config) UpgradeAppV2(clusterID string, repo *ClusterRepo, chartUpgrade *types2.ChartUpgradeAction) (*types2.ChartActionOutput, error) {
+	if repo == nil || chartUpgrade == nil {
+		return nil, fmt.Errorf("Catalog V2 id and chartUpgrade should be provided")
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	resource := &types.Resource{
+		ID:      repo.ID,
+		Type:    repo.Type,
+		Links:   repo.Links,
+		Actions: repo.Actions,
+	}
+	resp := &types2.ChartActionOutput{}
+	err = client.Action(catalogV2APIType, "upgrade", resource, chartUpgrade, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upgrade app v2: %v", err)
+	}
+	return resp, nil
 }
 
 func (c *Config) UpdateClusterByID(cluster *managementClient.Cluster, update map[string]interface{}) (*managementClient.Cluster, error) {

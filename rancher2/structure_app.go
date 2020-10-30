@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	projectClient "github.com/rancher/types/client/project/v3"
+	projectClient "github.com/rancher/rancher/pkg/client/generated/project/v3"
 )
 
 const (
@@ -157,6 +157,8 @@ func expandApp(in *schema.ResourceData) (*projectClient.App, error) {
 	if v, ok := in.Get("labels").(map[string]interface{}); ok && len(v) > 0 {
 		obj.Labels = toMapString(v)
 	}
+
+	obj.Timeout = int64(in.Timeout(schema.TimeoutCreate).Seconds())
 
 	return obj, nil
 }

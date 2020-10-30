@@ -5,10 +5,14 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	managementClient "github.com/rancher/types/client/management/v3"
+	managementClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 )
 
 var (
+	testNotifierDingtalkConf       *managementClient.Notifier
+	testNotifierDingtalkInterface  map[string]interface{}
+	testNotifierMSTeamsConf        *managementClient.Notifier
+	testNotifierMSTeamsInterface   map[string]interface{}
 	testNotifierPagerdutyConf      *managementClient.Notifier
 	testNotifierPagerdutyInterface map[string]interface{}
 	testNotifierSlackConf          *managementClient.Notifier
@@ -22,6 +26,30 @@ var (
 )
 
 func init() {
+	testNotifierDingtalkConf = &managementClient.Notifier{
+		Name:           "name",
+		ClusterID:      "cluster_id",
+		Description:    "description",
+		DingtalkConfig: testNotifierDingtalkConfigConf,
+	}
+	testNotifierDingtalkInterface = map[string]interface{}{
+		"name":            "name",
+		"cluster_id":      "cluster_id",
+		"description":     "description",
+		"dingtalk_config": testNotifierDingtalkConfigInterface,
+	}
+	testNotifierMSTeamsConf = &managementClient.Notifier{
+		Name:          "name",
+		ClusterID:     "cluster_id",
+		Description:   "description",
+		MSTeamsConfig: testNotifierMSTeamsConfigConf,
+	}
+	testNotifierMSTeamsInterface = map[string]interface{}{
+		"name":           "name",
+		"cluster_id":     "cluster_id",
+		"description":    "description",
+		"msteams_config": testNotifierMSTeamsConfigInterface,
+	}
 	testNotifierPagerdutyConf = &managementClient.Notifier{
 		Name:            "name",
 		ClusterID:       "cluster_id",
@@ -91,6 +119,14 @@ func TestFlattenNotifier(t *testing.T) {
 		ExpectedOutput map[string]interface{}
 	}{
 		{
+			testNotifierDingtalkConf,
+			testNotifierDingtalkInterface,
+		},
+		{
+			testNotifierMSTeamsConf,
+			testNotifierMSTeamsInterface,
+		},
+		{
 			testNotifierPagerdutyConf,
 			testNotifierPagerdutyInterface,
 		},
@@ -135,6 +171,14 @@ func TestExpandNotifier(t *testing.T) {
 		Input          map[string]interface{}
 		ExpectedOutput *managementClient.Notifier
 	}{
+		{
+			testNotifierDingtalkInterface,
+			testNotifierDingtalkConf,
+		},
+		{
+			testNotifierMSTeamsInterface,
+			testNotifierMSTeamsConf,
+		},
 		{
 			testNotifierPagerdutyInterface,
 			testNotifierPagerdutyConf,

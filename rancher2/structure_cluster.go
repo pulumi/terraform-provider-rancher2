@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	managementClient "github.com/rancher/types/client/management/v3"
+	managementClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 )
 
 // Flatteners
@@ -126,6 +126,10 @@ func flattenCluster(d *schema.ResourceData, in *Cluster, clusterRegToken *manage
 		return err
 	}
 
+	if len(in.CACert) > 0 {
+		d.Set("ca_cert", in.CACert)
+	}
+
 	d.Set("kube_config", kubeConfig.Config)
 	d.Set("default_project_id", defaultProjectID)
 	d.Set("system_project_id", systemProjectID)
@@ -158,6 +162,15 @@ func flattenCluster(d *schema.ResourceData, in *Cluster, clusterRegToken *manage
 		if err != nil {
 			return err
 		}
+	case clusterDriverEKSImport:
+		v, ok := d.Get("eks_import").([]interface{})
+		if !ok {
+			v = []interface{}{}
+		}
+		err = d.Set("eks_import", flattenClusterEKSImport(in.EKSConfig, v))
+		if err != nil {
+			return err
+		}
 	case clusterDriverGKE:
 		v, ok := d.Get("gke_config").([]interface{})
 		if !ok {
@@ -168,6 +181,20 @@ func flattenCluster(d *schema.ResourceData, in *Cluster, clusterRegToken *manage
 			return err
 		}
 		err = d.Set("gke_config", gkeConfig)
+		if err != nil {
+			return err
+		}
+	case clusterOKEKind, clusterDriverOKE:
+		v, ok := d.Get("oke_config").([]interface{})
+		if !ok {
+			v = []interface{}{}
+		}
+
+		okeConfig, err := flattenClusterOKEConfig(in.OracleKubernetesEngineConfig, v)
+		if err != nil {
+			return err
+		}
+		err = d.Set("oke_config", okeConfig)
 		if err != nil {
 			return err
 		}
@@ -331,6 +358,11 @@ func expandCluster(in *schema.ResourceData) (*Cluster, error) {
 		obj.Driver = clusterDriverEKS
 	}
 
+	if v, ok := in.Get("eks_import").([]interface{}); ok && len(v) > 0 {
+		obj.EKSConfig = expandClusterEKSImport(v)
+		obj.Driver = clusterDriverEKSImport
+	}
+
 	if v, ok := in.Get("gke_config").([]interface{}); ok && len(v) > 0 {
 		gkeConfig, err := expandClusterGKEConfig(v, obj.Name)
 		if err != nil {
@@ -338,6 +370,15 @@ func expandCluster(in *schema.ResourceData) (*Cluster, error) {
 		}
 		obj.GoogleKubernetesEngineConfig = gkeConfig
 		obj.Driver = clusterDriverGKE
+	}
+
+	if v, ok := in.Get("oke_config").([]interface{}); ok && len(v) > 0 {
+		okeConfig, err := expandClusterOKEConfig(v, obj.Name)
+		if err != nil {
+			return nil, err
+		}
+		obj.OracleKubernetesEngineConfig = okeConfig
+		obj.Driver = clusterOKEKind
 	}
 
 	if v, ok := in.Get("k3s_config").([]interface{}); ok && len(v) > 0 {

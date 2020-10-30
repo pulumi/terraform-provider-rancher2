@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	managementClient "github.com/rancher/types/client/management/v3"
+	managementClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 )
 
 func resourceRancher2Notifier() *schema.Resource {
@@ -105,6 +105,14 @@ func resourceRancher2NotifierUpdate(d *schema.ResourceData, meta interface{}) er
 		"sendResolved": d.Get("send_resolved").(bool),
 		"annotations":  toMapString(d.Get("annotations").(map[string]interface{})),
 		"labels":       toMapString(d.Get("labels").(map[string]interface{})),
+	}
+
+	if notifier.DingtalkConfig != nil && d.HasChange("dingtalk_config") {
+		update["dingtalkConfig"] = expandNotifierDingtalkConfig(d.Get("dingtalk_config").([]interface{}))
+	}
+
+	if notifier.MSTeamsConfig != nil && d.HasChange("msteams_config") {
+		update["msteamsConfig"] = expandNotifierMSTeamsConfig(d.Get("msteams_config").([]interface{}))
 	}
 
 	if notifier.PagerdutyConfig != nil && d.HasChange("pagerduty_config") {

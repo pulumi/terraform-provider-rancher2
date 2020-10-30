@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/terraform"
-	managementClient "github.com/rancher/types/client/management/v3"
+	managementClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 )
 
 const (
@@ -23,6 +23,9 @@ resource "` + testAccRancher2AuthConfigOpenLdapType + `" "openldap" {
   group_member_user_attribute = "entrydn"
   group_object_class = "groupOfNames"
   user_name_attribute = "givenName"
+  enabled = false
+  test_username = "test"
+  test_password = "test"
 }
 `
 	testAccRancher2AuthConfigOpenLdapUpdateConfig = `
@@ -37,6 +40,9 @@ resource "` + testAccRancher2AuthConfigOpenLdapType + `" "openldap" {
   group_member_user_attribute = "entrydn"
   group_object_class = "groupOfNames"
   user_name_attribute = "givenName-updated"
+  enabled = false
+  test_username = "test"
+  test_password = "test"
 }
  `
 )
@@ -100,7 +106,6 @@ func TestAccRancher2AuthConfigOpenLdap_disappears(t *testing.T) {
 					testAccCheckRancher2AuthConfigExists(testAccRancher2AuthConfigOpenLdapType+"."+AuthConfigOpenLdapName, authConfig),
 					testAccRancher2AuthConfigDisappears(authConfig, testAccRancher2AuthConfigOpenLdapType),
 				),
-				ExpectNonEmptyPlan: true,
 			},
 		},
 	})

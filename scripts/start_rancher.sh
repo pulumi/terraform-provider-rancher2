@@ -15,14 +15,15 @@ K3S_INGRESS_PORT_TLS=${K3S_INGRESS_PORT_TLS:-8443}
 KUBECTL_BIN=${KUBECTL_BIN:-"${DOCKER_BIN} exec -i ${K3S_SERVER} kubectl"}
 
 ## cert-manager
-CERTMANAGER_VERSION=${CERTMANAGER_VERSION:-"v0.14.3"}
+CERTMANAGER_VERSION=${CERTMANAGER_VERSION:-"v1.0.1"}
 CERTMANAGER_CRD=${CERTMANAGER_CRD:-"https://github.com/jetstack/cert-manager/releases/download/${CERTMANAGER_VERSION}/cert-manager.crds.yaml"}
 CERTMANAGER_NS=${CERTMANAGER_NS:-"cert-manager"}
 
 ## rancher
-RANCHER_VERSION=${RANCHER_VERSION:-"v2.4.8"}
+RANCHER_VERSION=${RANCHER_VERSION:-"v2.5.1"}
 RANCHER_NS=${RANCHER_NS:-"cattle-system"}
-RANCHER_HOSTNAME="rancher.${K3S_SERVER_IP}.xip.io"
+export RANCHER_HOSTNAME="rancher.${K3S_SERVER_IP}.xip.io"
+export RANCHER_IP=${K3S_SERVER_IP}
 
 # Installing helm charts 
 ## cert-manager
@@ -80,16 +81,15 @@ spec:
   chart: rancher
   repo: https://releases.rancher.com/server-charts/latest
   targetNamespace: ${RANCHER_NS}
-  version: ${RANCHER_VERSION}
   set:
     hostname: ${RANCHER_HOSTNAME}
-    certmanager.version: ${CERTMANAGER_VERSION}
     replicas: 1
+    rancherImageTag: ${RANCHER_VERSION}
 EOF
 
 ${DOCKER_BIN} cp ${TEMP_DIR}"/rancher.yaml" ${K3S_SERVER}:/var/lib/rancher/k3s/server/manifests/
 ## waiting for HelmChart rancher
-while [[ $(${KUBECTL_BIN} -n kube-system get helmchart rancher -o 'jsonpath={..spec.version}') != ${RANCHER_VERSION} ]] ; 
+while [[ $(${KUBECTL_BIN} -n kube-system get helmchart rancher -o 'jsonpath={..spec.set.rancherImageTag}') != ${RANCHER_VERSION} ]] ; 
 do echo "Waiting for HelmChart rancher" && sleep 2;
 done
 ## waiting for helm-install-rancher
@@ -112,4 +112,3 @@ export RANCHER_VERSION=${RANCHER_VERSION}
 if [ ${EXPOSE_HOST_PORTS} == "true" ]; then 
   export RANCHER_EXPOSED_URL="https://rancher.127.0.0.1.xip.io:${K3S_INGRESS_PORT_TLS}"
 fi
-

@@ -177,7 +177,7 @@ func DoPost(url, data, cacert string, insecure bool, headers map[string]string) 
 	return response, nil
 }
 
-func DoGet(url, username, password, cacert string, insecure bool) ([]byte, error) {
+func DoGet(url, username, password, token, cacert string, insecure bool) ([]byte, error) {
 	start := time.Now()
 
 	if url == "" {
@@ -186,13 +186,16 @@ func DoGet(url, username, password, cacert string, insecure bool) ([]byte, error
 	log.Println("Getting from ", url)
 
 	client := &http.Client{
-		Timeout: time.Duration(10 * time.Second),
+		Timeout: time.Duration(60 * time.Second),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= maxHTTPRedirect {
 				return fmt.Errorf("Stopped after %d redirects", maxHTTPRedirect)
 			}
-			if len(username) > 0 && len(password) > 0 {
-				req.SetBasicAuth(username, password)
+			if len(token) > 0 {
+				req.Header.Add("Authorization", "Bearer "+token)
+			} else if len(username) > 0 && len(password) > 0 {
+				s := username + ":" + password
+				req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s)))
 			}
 			return nil
 		},
@@ -222,8 +225,11 @@ func DoGet(url, username, password, cacert string, insecure bool) ([]byte, error
 	if err != nil {
 		return nil, fmt.Errorf("Doing get: %v", err)
 	}
-	if len(username) > 0 && len(password) > 0 {
-		req.SetBasicAuth(username, password)
+	if len(token) > 0 {
+		req.Header.Add("Authorization", "Bearer "+token)
+	} else if len(username) > 0 && len(password) > 0 {
+		s := username + ":" + password
+		req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(s)))
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -615,4 +621,66 @@ func getLatestVersion(list map[string]string) (string, error) {
 	}
 
 	return sorted[len(sorted)-1].Original(), nil
+}
+
+func structToMap(item interface{}) map[string]interface{} {
+	res := map[string]interface{}{}
+	if item == nil {
+		return res
+	}
+	relType := reflect.TypeOf(item)
+	relValue := reflect.ValueOf(item)
+	switch relType.Kind() {
+	case reflect.Ptr:
+		relValue = reflect.ValueOf(item).Elem()
+		if !relValue.IsValid() {
+			return res
+		}
+		relType = reflect.ValueOf(item).Elem().Type()
+	}
+	for i := 0; i < relType.NumField(); i++ {
+		tags := strings.Split(relType.Field(i).Tag.Get("json"), ",")
+		tag := tags[0]
+		if tag != "" && tag != "-" {
+			switch relType.Field(i).Type.Kind() {
+			case reflect.Slice, reflect.Array:
+				subtype := relValue.Field(i).Type().Elem()
+				if subtype.Kind() == reflect.Struct {
+					subvalue := reflect.ValueOf(relValue.Field(i).Interface())
+					field := make([]interface{}, subvalue.Len())
+					for i := 0; i < subvalue.Len(); i++ {
+						field[i] = structToMap(subvalue.Index(i).Interface())
+					}
+					res[tag] = field
+				} else {
+					res[tag] = relValue.Field(i).Interface()
+				}
+			case reflect.Ptr:
+				subvalue := reflect.ValueOf(relValue.Field(i).Interface())
+				if !subvalue.IsValid() {
+					res[tag] = map[string]interface{}{}
+					break
+				}
+				subtype := relValue.Field(i).Type().Elem()
+				if subtype.Kind() == reflect.Struct {
+					res[tag] = structToMap(relValue.Field(i).Interface())
+				} else {
+					res[tag] = relValue.Field(i).Interface()
+				}
+			case reflect.Struct:
+				res[tag] = structToMap(relValue.Field(i).Interface())
+			default:
+				res[tag] = relValue.Field(i).Interface()
+			}
+		} else {
+			if relType.Field(i).Type.Kind() == reflect.Struct {
+				data := structToMap(relValue.Field(i).Interface())
+				for i := range data {
+					res[i] = data[i]
+				}
+			}
+		}
+	}
+
+	return res
 }

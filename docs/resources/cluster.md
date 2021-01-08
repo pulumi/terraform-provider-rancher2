@@ -710,10 +710,12 @@ The following attributes are exported:
 ##### Arguments
 
 * `nodelocal` - (Optional) Nodelocal dns config  (list Maxitem: 1)
+* `linear_autoscaler_params` - (Optional) LinearAutoScalerParams dns config (list Maxitem: 1)
 * `node_selector` - (Optional/Computed) DNS add-on node selector (map)
 * `provider` - (Optional) DNS add-on provider. `kube-dns`, `coredns` (default), and `none` are supported (string)
 * `reverse_cidrs` - (Optional/Computed) DNS add-on reverse cidr  (list)
 * `upstream_nameservers` - (Optional/Computed) DNS add-on upstream nameservers  (list)
+* `update_strategy` - (Optional) DNS update strategy (list Maxitems: 1)
 
 ##### `nodelocal`
 
@@ -721,6 +723,16 @@ The following attributes are exported:
 
 * `ip_address` - (required) Nodelocal dns ip address (string)
 * `node_selector` - (Optional) Node selector key pair (map)
+
+##### `linear_autoscaler_params`
+
+###### Arguments
+
+* `cores_per_replica` - (Optional) number of replicas per cluster cores (float64)
+* `nodes_per_replica` - (Optional) number of replica per cluster nodes (float64)
+* `max` - (Optional) maximum number of replicas (int64)
+* `min` - (Optional) minimum number of replicas (int64)
+* `prevent_single_point_failure` - (Optional) prevent single point of failure
 
 #### `ingress`
 
@@ -1147,6 +1159,7 @@ The following arguments are supported:
 * `enable_http_load_balancing` - (Optional) Enable HTTP load balancing on GKE cluster. Default `true` (bool)
 * `enable_kubernetes_dashboard` - (Optional) Whether to enable the Kubernetes dashboard. Default `false` (bool)
 * `enable_legacy_abac` - (Optional) Whether to enable legacy abac on the cluster. Default `false` (bool)
+* `enable_master_authorized_network` - (Optional) Enable master authorized network. Set to `true` if `master_authorized_network_cidr_blocks` is set. Default `false` (bool)
 * `enable_network_policy_config` - (Optional) Enable network policy config for the cluster. Default `true` (bool)
 * `enable_nodepool_autoscaling` - (Optional) Enable nodepool autoscaling. Default `false` (bool)
 * `enable_private_endpoint` - (Optional) Whether the master's internal IP address is used as the cluster endpoint. Default `false` (bool)

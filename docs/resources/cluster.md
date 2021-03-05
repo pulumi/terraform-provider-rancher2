@@ -60,6 +60,8 @@ resource "rancher2_cluster" "foo-custom" {
 
 ### Creating Rancher v2 RKE cluster enabling and customizing monitoring
 
+**Note** Cluster monitoring version `0.2.0` or above, can't be enabled until cluster is fully deployed as [`kubeVersion`](https://github.com/rancher/system-charts/blob/52be656700468904b9bf15c3f39cd7112e1f8c9b/charts/rancher-monitoring/v0.2.0/Chart.yaml#L12) requirement has been introduced to helm chart 
+
 ```hcl
 # Create a new rancher2 RKE Cluster
 resource "rancher2_cluster" "foo-custom" {
@@ -432,8 +434,8 @@ The following arguments are supported:
 * `enable_cluster_istio` - (Deprecated) Deploy istio on `system` project and `istio-system` namespace, using rancher2_app resource instead. See above example.
 * `enable_network_policy` - (Optional/Computed) Enable project network isolation (bool)
 * `scheduled_cluster_scan`- (Optional/Computed) Cluster scheduled cis scan. For Rancher v2.4.0 or above (List maxitems:1)
-* `annotations` - (Optional/Computed) Annotations for Node Pool object (map)
-* `labels` - (Optional/Computed) Labels for Node Pool object (map)
+* `annotations` - (Optional/Computed) Annotations for the Cluster (map)
+* `labels` - (Optional/Computed) Labels for the Cluster (map)
 * `windows_prefered_cluster` - (Optional) Windows preferred cluster. Default: `false` (bool)
 
 
@@ -479,6 +481,7 @@ The following attributes are exported:
 * `network` - (Optional/Computed) Kubernetes cluster networking (list maxitems:1)
 * `nodes` - (Optional) RKE cluster nodes (list)
 * `prefix_path` - (Optional/Computed) Prefix to customize Kubernetes path (string)
+* `win_prefix_path` - (Optional/Computed) Prefix to customize Kubernetes path for windows (string)
 * `private_registries` - (Optional) private registries for docker images (list)
 * `services` - (Optional/Computed) Kubernetes cluster services (list maxitems:1)
 * `ssh_agent_auth` - (Optional) Use ssh agent auth. Default `false`
@@ -870,6 +873,7 @@ The following attributes are exported:
 * `retention` - (Optional) Retention for etcd backup. Default `6` (int)
 * `s3_backup_config` - (Optional) S3 config options for etcd backup (list maxitems:1)
 * `safe_timestamp` - (Optional) Safe timestamp for etcd backup. Default: `false` (bool)
+* `timeout` - (Optional/Computed) Timeout in seconds for etcd backup. Default: `300`. Just for Rancher v2.5.6 and above (int)
 
 ###### `s3_backup_config`
 
@@ -1046,6 +1050,7 @@ The following arguments are supported:
 * `docker_bridge_cidr` - (Required) A CIDR notation IP range assigned to the Docker bridge network. It must not overlap with any Subnet IP ranges or the Kubernetes Service address range specified in \"service cidr\". Default `172.17.0.1/16` (string)
 * `enable_http_application_routing` - (Optional) Enable the Kubernetes ingress with automatic public DNS name creation. Default `false` (bool)
 * `enable_monitoring` - (Optional) Turn on Azure Log Analytics monitoring. Uses the Log Analytics \"Default\" workspace if it exists, else creates one. if using an existing workspace, specifies \"log analytics workspace resource id\". Default `true` (bool)
+* `load_balancer_sku` - (Optional/Computed) Load balancer type (basic | standard). Must be standard for auto-scaling
 * `location` - (Optional) Azure Kubernetes cluster location. Default `eastus` (string)
 * `log_analytics_workspace` - (Optional) The name of an existing Azure Log Analytics Workspace to use for storing monitoring data. If not specified, uses '{resource group}-{subscription id}-{location code}' (string)
 * `log_analytics_workspace_resource_group` - (Optional) The resource group of an existing Azure Log Analytics Workspace to use for storing monitoring data. If not specified, uses the 'Cluster' resource group (string)
@@ -1189,10 +1194,12 @@ The following arguments are supported:
 The following arguments are supported:
 
 * `compartment_id` - (Required) The OCID of the compartment in which to create resources OKE cluster and related resources (string)
+* `custom_boot_volume_size` - (Optional) Optional custom boot volume size (GB) for all nodes. If you specify 0, it will apply the default according to the `node_image` specified. Default `0` (int)
 * `description` - (Optional) An optional description of this cluster (string)
 * `enable_kubernetes_dashboard` - (Optional) Specifies whether to enable the Kubernetes dashboard. Default `false` (bool)
 * `enable_private_nodes` - (Optional) Specifies whether worker nodes will be deployed into a new, private, subnet. Default `false` (bool)
 * `fingerprint` - (Required) The fingerprint corresponding to the specified user's private API Key (string)
+* `flex_ocpus` - (Optional) Specifies number of OCPUs for nodes (requires flexible shape specified with `node_shape`) (int)
 * `kubernetes_version` - (Required) The Kubernetes version that will be used for your master *and* OKE worker nodes (string)
 * `load_balancer_subnet_name_1` - (Optional) The name of the first existing subnet to use for Kubernetes services / LB. `vcn_name` is also required when specifying an existing subnet. (string)
 * `load_balancer_subnet_name_2` - (Optional) The name of a second existing subnet to use for Kubernetes services / LB. A second subnet is only required when it is AD-specific (non-regional) (string)
@@ -1210,6 +1217,7 @@ The following arguments are supported:
 * `skip_vcn_delete` - (Optional) Specifies whether to skip deleting the virtual cloud network (VCN) on destroy. Default `false` (bool)
 * `tenancy_id` - (Required) The OCID of the tenancy in which to create resources (string)
 * `user_ocid` - (Required) The OCID of a user who has access to the tenancy/compartment (string)
+* `vcn_compartment_id` - (Optional) The OCID of the compartment (if different from `compartment_id`) in which to find the pre-existing virtual network set with `vcn_name`. (string)
 * `vcn_name` - (Optional) The name of an existing virtual network to use for the cluster creation. If set, you must also set `load_balancer_subnet_name_1`. A VCN and subnets will be created if none are specified. (string)
 * `worker_node_ingress_cidr` - (Optional) Additional CIDR from which to allow ingress to worker nodes (string)
 
@@ -1242,7 +1250,7 @@ The following arguments are supported:
 
 * `default` - (Required) Default variable value (string)
 * `required` - (Optional) Required variable. Default `false` (bool)
-* `type` - (Optional) Variable type. `boolean`, `int` and `string` are allowed. Default `string` (string)
+* `type` - (Optional) Variable type. `boolean`, `int`, `password`, and `string` are allowed. Default `string` (string)
 * `variable` - (Optional) Variable name (string)
 
 ### `cluster_registration_token`

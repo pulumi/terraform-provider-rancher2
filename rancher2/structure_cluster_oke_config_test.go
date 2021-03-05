@@ -15,11 +15,13 @@ var (
 func init() {
 	testClusterOKEConfigConf = &OracleKubernetesEngineConfig{
 		CompartmentID:               "compartment",
+		CustomBootVolumeSize:        0,
 		Description:                 "description",
 		DisplayName:                 "test",
 		DriverName:                  clusterDriverOKE,
 		EnableKubernetesDashboard:   true,
 		Fingerprint:                 "fingerprint",
+		FlexOCPUs:                   0,
 		KubernetesVersion:           "version",
 		Name:                        "test",
 		NodeImage:                   "image",
@@ -46,10 +48,12 @@ func init() {
 	testClusterOKEConfigInterface = []interface{}{
 		map[string]interface{}{
 			"compartment_id":              "compartment",
+			"custom_boot_volume_size":     0,
 			"description":                 "description",
 			"enable_kubernetes_dashboard": true,
 			"enable_private_nodes":        false,
 			"fingerprint":                 "fingerprint",
+			"flex_ocpus":                  0,
 			"kubernetes_version":          "version",
 			"node_image":                  "image",
 			"node_pool_dns_domain_name":   "nodedns",
@@ -67,6 +71,7 @@ func init() {
 			"skip_vcn_delete":             false,
 			"tenancy_id":                  "tenancy",
 			"user_ocid":                   "user",
+			"vcn_compartment_id":          "",
 			"vcn_name":                    "",
 			"worker_node_ingress_cidr":    "",
 		},

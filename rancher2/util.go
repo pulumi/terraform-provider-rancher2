@@ -299,6 +299,26 @@ func IsServerError(err error) bool {
 	return apiError.StatusCode == http.StatusInternalServerError
 }
 
+// IsBadGatewayError checks if the given APIError is a Bad Gateway Server Error HTTP statuscode
+func IsBadGatewayError(err error) bool {
+	apiError, ok := err.(*clientbase.APIError)
+	if !ok {
+		return false
+	}
+
+	return apiError.StatusCode == http.StatusBadGateway
+}
+
+// IsServiceUnavailableError checks if the given APIError is a Service Unavailable Server Error HTTP statuscode
+func IsServiceUnavailableError(err error) bool {
+	apiError, ok := err.(*clientbase.APIError)
+	if !ok {
+		return false
+	}
+
+	return apiError.StatusCode == http.StatusServiceUnavailable
+}
+
 func splitTokenID(token string) string {
 	separator := ":"
 
@@ -378,6 +398,27 @@ func splitAppID(id string) (projectID, appID string, err error) {
 	}
 
 	return fields[0] + separator + fields[1], fields[1] + separator + fields[2], nil
+}
+
+func updateVersionExternalID(externalID, version string) string {
+	//Global catalog url: catalog://?catalog=demo&template=test&version=1.23.0
+	//Cluster catalog url: catalog://?catalog=c-XXXXX/test&type=clusterCatalog&template=test&version=1.23.0
+	//Project catalog url: catalog://?catalog=p-XXXXX/test&type=projectCatalog&template=test&version=1.23.0
+
+	str := strings.TrimPrefix(externalID, AppTemplateExternalIDPrefix)
+	values := strings.Split(str, "&")
+	out := AppTemplateExternalIDPrefix
+	for _, v := range values {
+		if strings.Contains(v, "version=") {
+			pair := strings.Split(v, "=")
+			if pair[0] == "version" {
+				pair[1] = version
+			}
+			v = pair[0] + "=" + pair[1]
+		}
+		out = out + "&" + v
+	}
+	return out
 }
 
 func toArrayString(in []interface{}) []string {

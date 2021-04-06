@@ -1,6 +1,7 @@
 package rancher2
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -11,10 +12,12 @@ import (
 	"github.com/rancher/norman/clientbase"
 	"github.com/rancher/norman/types"
 	types2 "github.com/rancher/rancher/pkg/api/steve/catalog/types"
+	catalogClient "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	clusterClient "github.com/rancher/rancher/pkg/client/generated/cluster/v3"
 	managementClient "github.com/rancher/rancher/pkg/client/generated/management/v3"
 	projectClient "github.com/rancher/rancher/pkg/client/generated/project/v3"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -674,120 +677,148 @@ func (c *Config) GetClusterByID(id string) (*managementClient.Cluster, error) {
 	return client.Cluster.ByID(id)
 }
 
-func (c *Config) GetSettingV2ByID(clusterID, id string) (*SettingV2, error) {
+func (c *Config) getObjectV2ByID(clusterID, id, APIType string, resp interface{}) error {
 	if id == "" {
-		return nil, fmt.Errorf("Setting V2 id is nil")
+		return fmt.Errorf("Object V2 id is nil")
 	}
-
-	client, err := c.CatalogV2Client(clusterID)
-	if err != nil {
-		return nil, err
+	if resp == nil {
+		return fmt.Errorf("Object V2 response is nil")
 	}
-	resp := &SettingV2{}
-	for i := 0; i < rancher2RetriesOnServerError; i++ {
-		err = client.ByID(settingV2APIType, id, resp)
-		if err == nil {
-			break
-		}
-		if !IsServerError(err) || (i+1) == rancher2RetriesOnServerError {
-			return nil, err
-		}
-		time.Sleep(rancher2RetriesWait * time.Second)
-	}
-
-	return resp, nil
-}
-
-func (c *Config) GetCatalogV2ByID(clusterID, id string) (*ClusterRepo, error) {
-	if id == "" {
-		return nil, fmt.Errorf("Catalog V2 id is nil")
-	}
-
-	client, err := c.CatalogV2Client(clusterID)
-	if err != nil {
-		return nil, err
-	}
-	resp := &ClusterRepo{}
-	for i := 0; i < rancher2RetriesOnServerError; i++ {
-		err = client.ByID(catalogV2APIType, id, resp)
-		if err == nil {
-			break
-		}
-		if (!IsServerError(err) && !IsNotFound(err)) || (i+1) == rancher2RetriesOnServerError {
-			return nil, err
-		}
-		time.Sleep(rancher2RetriesWait * time.Second)
-	}
-
-	return resp, nil
-}
-
-func (c *Config) CreateCatalogV2(clusterID string, repo *ClusterRepo) (*ClusterRepo, error) {
-	if repo == nil {
-		return nil, fmt.Errorf("Catalog V2 id is nil")
-	}
-
-	client, err := c.CatalogV2Client(clusterID)
-	if err != nil {
-		return nil, err
-	}
-	resp := &ClusterRepo{}
-	err = client.Create(catalogV2APIType, repo, resp)
-	return resp, err
-}
-
-func (c *Config) DeleteCatalogV2(clusterID string, repo *ClusterRepo) error {
-	if repo == nil {
-		return fmt.Errorf("Catalog V2 id is nil")
+	if len(APIType) == 0 {
+		return fmt.Errorf("Object API V2 type is nil")
 	}
 
 	client, err := c.CatalogV2Client(clusterID)
 	if err != nil {
 		return err
 	}
-	resource := &types.Resource{
-		ID:      repo.ID,
-		Type:    repo.Type,
-		Links:   repo.Links,
-		Actions: repo.Actions,
+	for i := 0; i < rancher2RetriesOnServerError; i++ {
+		err = client.ByID(APIType, id, resp)
+		if err == nil {
+			break
+		}
+		if (!IsServerError(err) && !IsNotFound(err)) || (i+1) == rancher2RetriesOnServerError {
+			return err
+		}
+		time.Sleep(rancher2RetriesWait * time.Second)
 	}
-	return client.Delete(resource)
+
+	return nil
 }
 
-func (c *Config) UpdateCatalogV2(clusterID, id string, update *ClusterRepo) (*ClusterRepo, error) {
-	if id == "" || update == nil {
-		return nil, fmt.Errorf("Catalog V2 id is nil")
-	}
-
-	repo, err := c.GetCatalogV2ByID(clusterID, id)
-
-	client, err := c.CatalogV2Client(clusterID)
+func (c *Config) GetSettingV2ByID(clusterID, id string) (*SettingV2, error) {
+	resp := &SettingV2{}
+	err := c.getObjectV2ByID(clusterID, id, settingV2APIType, resp)
 	if err != nil {
+		if !IsServerError(err) && !IsNotFound(err) && !IsForbidden(err) {
+			return nil, fmt.Errorf("Getting Setting V2: %s", err)
+		}
 		return nil, err
 	}
-	resource := &types.Resource{
-		ID:      repo.ID,
-		Type:    repo.Type,
-		Links:   repo.Links,
-		Actions: repo.Actions,
+	return resp, nil
+}
+
+func (c *Config) GetSecretV2ByID(clusterID, id string) (*SecretV2, error) {
+	resp := &SecretV2{}
+	err := c.getObjectV2ByID(clusterID, id, secretV2APIType, resp)
+	if err != nil {
+		if !IsServerError(err) && !IsNotFound(err) && !IsForbidden(err) {
+			return nil, fmt.Errorf("Getting Secret V2: %s", err)
+		}
+		return nil, err
 	}
+	return resp, nil
+}
+
+func (c *Config) GetCatalogV2ByID(clusterID, id string) (*ClusterRepo, error) {
 	resp := &ClusterRepo{}
-	err = client.Update(catalogV2APIType, resource, update, resp)
-	return resp, err
+	err := c.getObjectV2ByID(clusterID, id, catalogV2APIType, resp)
+	if err != nil {
+		if !IsServerError(err) && !IsNotFound(err) && !IsForbidden(err) {
+			return nil, fmt.Errorf("Getting Catalog V2: %s", err)
+		}
+		return nil, err
+	}
+	return resp, nil
 }
 
 func (c *Config) GetAppV2ByID(clusterID, id string) (*AppV2, error) {
-	if id == "" {
-		return nil, fmt.Errorf("App V2 id is nil")
+	resp := &AppV2{}
+	err := c.getObjectV2ByID(clusterID, id, appV2APIType, resp)
+	if err != nil {
+		if !IsServerError(err) && !IsNotFound(err) && !IsForbidden(err) {
+			return nil, fmt.Errorf("Getting App V2: %s", err)
+		}
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *Config) GetAppV2OperationByID(clusterID, id string) (map[string]interface{}, error) {
+	resp := map[string]interface{}{}
+	err := c.getObjectV2ByID(clusterID, id, appV2OperationAPIType, &resp)
+	if err != nil {
+		if !IsServerError(err) && !IsNotFound(err) && !IsForbidden(err) {
+			return nil, fmt.Errorf("Getting App V2 logs: %s", err)
+		}
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *Config) createObjectV2(clusterID string, APIType string, obj, resp interface{}) error {
+	if resp == nil || obj == nil {
+		return fmt.Errorf("Object V2 and/or response is nil")
+	}
+	if len(APIType) == 0 {
+		return fmt.Errorf("Object API V2 type is nil")
 	}
 
 	client, err := c.CatalogV2Client(clusterID)
 	if err != nil {
+		return err
+	}
+	err = client.Create(APIType, obj, resp)
+	return err
+}
+
+func (c *Config) CreateCatalogV2(clusterID string, repo *ClusterRepo) (*ClusterRepo, error) {
+	resp := &ClusterRepo{}
+	err := c.createObjectV2(clusterID, catalogV2APIType, repo, resp)
+	if err != nil {
+		return nil, fmt.Errorf("Creating Catalog V2: %s", err)
+	}
+	return resp, nil
+}
+
+func (c *Config) CreateSecretV2(clusterID string, secret *SecretV2) (*SecretV2, error) {
+	// Converting secret V2 object to map[string]interface{} as type fields is duplicated
+	secret2, err := interfaceToMap(secret)
+	if err != nil {
 		return nil, err
 	}
-	resp := &AppV2{}
+	secret2["type"] = secret2["_type"]
+	resp := &SecretV2{}
+	err = c.createObjectV2(clusterID, secretV2APIType, secret2, resp)
+	if err != nil {
+		return nil, fmt.Errorf("Creating Catalog V2: %s", err)
+	}
+	return resp, nil
+}
+
+func (c *Config) GetCatalogV2List(clusterID string) ([]ClusterRepo, error) {
+	if clusterID == "" {
+		return nil, fmt.Errorf("Cluster ID is nil")
+	}
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return nil, err
+	}
+
+	listOpts := NewListOpts(nil)
+	resp := &ClusterRepoCollection{}
 	for i := 0; i < rancher2RetriesOnServerError; i++ {
-		err = client.ByID(appV2APIType, id, resp)
+		err = client.List(catalogV2APIType, listOpts, resp)
 		if err == nil {
 			break
 		}
@@ -797,31 +828,146 @@ func (c *Config) GetAppV2ByID(clusterID, id string) (*AppV2, error) {
 		time.Sleep(rancher2RetriesWait * time.Second)
 	}
 
-	return resp, nil
+	return resp.Data, nil
 }
 
-func (c *Config) GetAppV2OperationByID(clusterID, id string) (map[string]interface{}, error) {
-	if id == "" {
-		return nil, fmt.Errorf("App V2 operation id is nil")
+func (c *Config) WaitCatalogV2Downloaded(clusterID, catalogID string) (*ClusterRepo, error) {
+	if clusterID == "" || catalogID == "" {
+		return nil, fmt.Errorf("Cluster ID and/or Catalog V2 ID is nil")
+	}
+
+	for i := 0; i <= catalogV2Timeout; i = i + rancher2RetriesWait {
+		obj, err := c.GetCatalogV2ByID(clusterID, catalogID)
+		if err != nil {
+			return nil, fmt.Errorf("Getting catalog V2 ID (%s): %v", catalogID, err)
+		}
+		for i := range obj.Status.Conditions {
+			if obj.Status.Conditions[i].Type == string(catalogClient.RepoDownloaded) {
+				// Status of the condition, one of True, False, Unknown.
+				if obj.Status.Conditions[i].Status == "Unknown" {
+					break
+				}
+				if obj.Status.Conditions[i].Status == "True" {
+					return obj, nil
+				}
+				return nil, fmt.Errorf("Catalog V2 ID %s: %s", catalogID, obj.Status.Conditions[i].Message)
+			}
+		}
+		time.Sleep(rancher2RetriesWait * time.Second)
+	}
+	return nil, fmt.Errorf("Timeout waiting for catalog V2 ID %s", catalogID)
+}
+
+func (c *Config) WaitAllCatalogV2Downloaded(clusterID string) ([]ClusterRepo, error) {
+	clusterRepos, err := c.GetCatalogV2List(clusterID)
+	if err != nil {
+		return nil, fmt.Errorf("[ERROR] getting catalog V2 list at cluster ID (%s): %s", clusterID, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), catalogV2Timeout*time.Second)
+	defer cancel()
+	g, ctx := errgroup.WithContext(ctx)
+	for _, clusterRepo := range clusterRepos {
+		repoID := clusterRepo.ID
+		g.Go(func() error {
+			_, err = c.WaitCatalogV2Downloaded(clusterID, repoID)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+	err = g.Wait()
+	if err != nil {
+		return clusterRepos, fmt.Errorf("[ERROR] waiting for all catalogs V2 to be active at cluster ID (%s): %s", clusterID, err)
+	}
+
+	return clusterRepos, nil
+}
+
+func (c *Config) deleteObjectV2(clusterID string, resource *types.Resource) error {
+	if resource == nil {
+		return fmt.Errorf("Object V2 id is nil")
 	}
 
 	client, err := c.CatalogV2Client(clusterID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	resp := map[string]interface{}{}
-	for i := 0; i < rancher2RetriesOnServerError; i++ {
-		err = client.ByID(appV2OperationAPIType, id, &resp)
-		if err == nil {
-			break
-		}
-		if !IsServerError(err) || (i+1) == rancher2RetriesOnServerError {
-			return nil, err
-		}
-		time.Sleep(rancher2RetriesWait * time.Second)
+	return client.Delete(resource)
+}
+
+func (c *Config) DeleteCatalogV2(clusterID string, obj *ClusterRepo) error {
+	if obj == nil {
+		return fmt.Errorf("Catalog V2 is nil")
 	}
 
-	return resp, nil
+	resource := &types.Resource{
+		ID:      obj.ID,
+		Type:    obj.Type,
+		Links:   obj.Links,
+		Actions: obj.Actions,
+	}
+	return c.deleteObjectV2(clusterID, resource)
+}
+
+func (c *Config) DeleteSecretV2(clusterID string, obj *SecretV2) error {
+	if obj == nil {
+		return fmt.Errorf("Secret V2 is nil")
+	}
+	resource := &types.Resource{
+		ID:      obj.ID,
+		Type:    secretV2APIType,
+		Links:   obj.Links,
+		Actions: obj.Actions,
+	}
+	return c.deleteObjectV2(clusterID, resource)
+}
+
+func (c *Config) updateObjectV2(clusterID, id, APIType string, update, resp interface{}) error {
+	if id == "" {
+		return fmt.Errorf("Object V2 id is nil")
+	}
+	if update == nil {
+		return fmt.Errorf("Object V2 update is nil")
+	}
+	if len(APIType) == 0 {
+		return fmt.Errorf("Object API V2 type is nil")
+	}
+
+	if resp == nil {
+		resp = map[string]interface{}{}
+	}
+
+	resource := &types.Resource{}
+	err := c.getObjectV2ByID(clusterID, id, APIType, resource)
+	if err != nil {
+		return err
+	}
+
+	client, err := c.CatalogV2Client(clusterID)
+	if err != nil {
+		return err
+	}
+	return client.Update(APIType, resource, update, resp)
+}
+
+func (c *Config) UpdateCatalogV2(clusterID, id string, update *ClusterRepo) (*ClusterRepo, error) {
+	resp := &ClusterRepo{}
+	err := c.updateObjectV2(clusterID, id, catalogV2APIType, update, resp)
+	return resp, err
+}
+
+func (c *Config) UpdateSecretV2(clusterID, id string, update *SecretV2) (*SecretV2, error) {
+	// Converting secret V2 object to map[string]interface{} as type fields is duplicated
+	updateMap, err := interfaceToMap(update)
+	if err != nil {
+		return nil, err
+	}
+	updateMap["type"] = updateMap["_type"]
+	resp := &SecretV2{}
+	err = c.updateObjectV2(clusterID, id, secretV2APIType, updateMap, resp)
+	return resp, err
 }
 
 func (c *Config) GetAppV2OperationLogs(clusterID string, op map[string]interface{}) (string, error) {
@@ -866,7 +1012,8 @@ func (c *Config) InfoAppV2(clusterID, repoName, chartName, chartVersion string) 
 	if repoName == "" || chartName == "" {
 		return nil, nil, fmt.Errorf("Catalog V2 id and chart name should be provided")
 	}
-	repo, err := c.GetCatalogV2ByID(clusterID, repoName)
+	// Waiting for the Catalog V2 is Downloaded
+	repo, err := c.WaitCatalogV2Downloaded(clusterID, repoName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -895,7 +1042,7 @@ func (c *Config) InfoAppV2(clusterID, repoName, chartName, chartVersion string) 
 		if err == nil {
 			break
 		}
-		if !IsServerError(err) || (i+1) == rancher2RetriesOnServerError {
+		if (!IsServerError(err) && !IsNotFound(err)) || (i+1) == rancher2RetriesOnServerError {
 			return nil, nil, fmt.Errorf("failed to get chart info %s:%s from catalog v2 %s: %v", chartName, chartVersion, repoName, err)
 		}
 		time.Sleep(rancher2RetriesWait * time.Second)

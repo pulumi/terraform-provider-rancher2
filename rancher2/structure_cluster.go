@@ -190,6 +190,16 @@ func flattenCluster(d *schema.ResourceData, in *Cluster, clusterRegToken *manage
 		if err != nil {
 			return err
 		}
+	case ToLower(clusterDriverGKEV2):
+		v, ok := d.Get("gke_config_v2").([]interface{})
+		if !ok {
+			v = []interface{}{}
+		}
+		gkeConfig := flattenClusterGKEConfigV2(in.GKEConfig, v)
+		err = d.Set("gke_config_v2", gkeConfig)
+		if err != nil {
+			return err
+		}
 	case clusterOKEKind, clusterDriverOKE:
 		v, ok := d.Get("oke_config").([]interface{})
 		if !ok {
@@ -206,8 +216,12 @@ func flattenCluster(d *schema.ResourceData, in *Cluster, clusterRegToken *manage
 		}
 	}
 
-	// Setting k3s_config and rke_config always as computed
+	// Setting k3s_config, rke2_config and rke_config always as computed
 	err = d.Set("k3s_config", flattenClusterK3SConfig(in.K3sConfig))
+	if err != nil {
+		return err
+	}
+	err = d.Set("rke2_config", flattenClusterRKE2Config(in.Rke2Config))
 	if err != nil {
 		return err
 	}
@@ -468,6 +482,12 @@ func expandCluster(in *schema.ResourceData) (*Cluster, error) {
 		obj.Driver = clusterDriverGKE
 	}
 
+	if v, ok := in.Get("gke_config_v2").([]interface{}); ok && len(v) > 0 {
+		gkeConfig := expandClusterGKEConfigV2(v)
+		obj.GKEConfig = gkeConfig
+		obj.Driver = clusterDriverGKEV2
+	}
+
 	if v, ok := in.Get("oke_config").([]interface{}); ok && len(v) > 0 {
 		okeConfig, err := expandClusterOKEConfig(v, obj.Name)
 		if err != nil {
@@ -489,6 +509,11 @@ func expandCluster(in *schema.ResourceData) (*Cluster, error) {
 		}
 		obj.RancherKubernetesEngineConfig = rkeConfig
 		obj.Driver = clusterDriverRKE
+	}
+
+	if v, ok := in.Get("rke2_config").([]interface{}); ok && len(v) > 0 {
+		obj.Rke2Config = expandClusterRKE2Config(v)
+		obj.Driver = clusterDriverRKE2
 	}
 
 	if len(obj.Driver) == 0 {

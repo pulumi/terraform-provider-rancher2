@@ -31,6 +31,14 @@ func dataSourceRancher2Cluster() *schema.Resource {
 					Schema: clusterRKEConfigFieldsData(),
 				},
 			},
+			"rke2_config": {
+				Type:     schema.TypeList,
+				MaxItems: 1,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: clusterRKE2ConfigFields(),
+				},
+			},
 			"k3s_config": {
 				Type:     schema.TypeList,
 				MaxItems: 1,
@@ -69,6 +77,14 @@ func dataSourceRancher2Cluster() *schema.Resource {
 				Computed: true,
 				Elem: &schema.Resource{
 					Schema: clusterGKEConfigFields(),
+				},
+			},
+			"gke_config_v2": {
+				Type:     schema.TypeList,
+				MaxItems: 1,
+				Computed: true,
+				Elem: &schema.Resource{
+					Schema: clusterGKEConfigV2Fields(),
 				},
 			},
 			"oke_config": {

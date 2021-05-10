@@ -402,6 +402,8 @@ resource "rancher2_cluster" "foo" {
       desired_size = 2
       max_size = 3
     }
+    private_access = true
+    public_access = false
   }
 }
 ```
@@ -434,6 +436,66 @@ resource "rancher2_cluster" "foo" {
         version = 1
       }
     }
+    private_access = true
+    public_access = true
+  }
+}
+```
+
+### Importing GKE cluster from Rancher v2, using `gke_config_v2`. For Rancher v2.5.8 or above.
+
+```hcl
+resource "rancher2_cloud_credential" "foo-google" {
+  name = "foo-google"
+  description= "Terraform cloudCredential acceptance test"
+  google_credential_config {
+    auth_encoded_json = file(<GOOGLE_AUTH_ENCODED_JSON>)
+  }
+}
+
+resource "rancher2_cluster" "foo" {
+  name = "foo"
+  description = "Foo rancher2 imported GKE cluster"
+  gke_config_v2 {
+    name = "foo"
+    google_credential_secret = rancher2_cloud_credential.foo-google.id
+    region = <REGION> # Zone argument could also be used instead of region
+    project_id = <PROJECT_ID>
+    imported = true
+  }
+}
+```
+
+### Creating GKE cluster from Rancher v2, using `gke_config_v2`. For Rancher v2.5.8 or above.
+
+**Note** At the moment, routed-based GKE clusters are not supported due to [rancher/issues/32585]](https://github.com/rancher/rancher/issues/32585)
+
+```
+resource "rancher2_cloud_credential" "foo-google" {
+  name = "foo-google"
+  description= "Terraform cloudCredential acceptance test"
+  google_credential_config {
+    auth_encoded_json = file(<GOOGLE_AUTH_ENCODED_JSON>)
+  }
+}
+
+resource "rancher2_cluster" "foo" {
+  name = "foo"
+  description = "Terraform GKE cluster"
+  gke_config_v2 {
+    name = "foo"
+    google_credential_secret = rancher2_cloud_credential.foo-google.id
+    region = <REGION> # Zone argument could also be used instead of region
+    project_id = <PROJECT_ID>
+    kubernetes_version = <K8S_VERSION>
+    network = <NETWORK>
+    subnetwork = <SUBNET>
+    node_pools {
+      initial_node_count = 1
+      max_pods_constraint = 110
+      name = <NODE_POOL_NAME>
+      version = <VERSION>
+    }
   }
 }
 ```
@@ -443,13 +505,15 @@ resource "rancher2_cluster" "foo" {
 The following arguments are supported:
 
 * `name` - (Required) The name of the Cluster (string)
-* `rke_config` - (Optional/Computed) The RKE configuration for `rke` Clusters. Conflicts with `aks_config`, `eks_config`, `gke_config`, `oke_config` and `k3s_config` (list maxitems:1)
-* `k3s_config` - (Optional/Computed) The K3S configuration for `k3s` imported Clusters. Conflicts with `aks_config`, `eks_config`, `gke_config`, `oke_config` and `rke_config` (list maxitems:1)
-* `aks_config` - (Optional) The Azure AKS configuration for `aks` Clusters. Conflicts with `eks_config`, `eks_config_v2`, `gke_config`, `oke_config` `k3s_config` and `rke_config` (list maxitems:1)
-* `eks_config` - (Optional) The Amazon EKS configuration for `eks` Clusters. Conflicts with `aks_config`, `eks_config_v2`, `gke_config`, `oke_config` `k3s_config` and `rke_config` (list maxitems:1)
-* `eks_config_v2` - (Optional) The Amazon EKS configuration to create or import `eks` Clusters. Conflicts with `aks_config`, `eks_config`, `gke_config`, `oke_config` `k3s_config` and `rke_config`. For Rancher v2.5.x or above (list maxitems:1)
-* `gke_config` - (Optional) The Google GKE configuration for `gke` Clusters. Conflicts with `aks_config`, `eks_config`, `eks_import`, `oke_config` `k3s_config` and `rke_config` (list maxitems:1)
-* `oke_config` - (Optional) The Oracle OKE configuration for `oke` Clusters. Conflicts with `aks_config`, `eks_config`, `eks_import`, `gke_config` `k3s_config` and `rke_config` (list maxitems:1)
+* `rke_config` - (Optional/Computed) The RKE configuration for `rke` Clusters. Conflicts with `aks_config`, `eks_config`, `eks_config_v2`, `gke_config`, `gke_config_v2`, `oke_config` and `k3s_config` (list maxitems:1)
+* `rke2_config` - (Optional/Computed) The RKE2 configuration for `rke2` Clusters. Conflicts with `aks_config`, `eks_config`, `gke_config`, `oke_config`, `k3s_config` and `rke_config` (list maxitems:1)
+* `k3s_config` - (Optional/Computed) The K3S configuration for `k3s` imported Clusters. Conflicts with `aks_config`, `eks_config`, `eks_config_v2`, `gke_config`, `gke_config_v2`, `oke_config` and `rke_config` (list maxitems:1)
+* `aks_config` - (Optional) The Azure AKS configuration for `aks` Clusters. Conflicts with `eks_config`, `eks_config_v2`, `gke_config`, `gke_config_v2`, `oke_config` `k3s_config` and `rke_config` (list maxitems:1)
+* `eks_config` - (Optional) The Amazon EKS configuration for `eks` Clusters. Conflicts with `aks_config`, `eks_config_v2`, `gke_config`, `gke_config_v2`, `oke_config` `k3s_config` and `rke_config` (list maxitems:1)
+* `eks_config_v2` - (Optional) The Amazon EKS V2 configuration to create or import `eks` Clusters. Conflicts with `aks_config`, `eks_config`, `gke_config`, `gke_config_v2`, `oke_config` `k3s_config` and `rke_config`. For Rancher v2.5.x or above (list maxitems:1)
+* `gke_config` - (Optional) The Google GKE configuration for `gke` Clusters. Conflicts with `aks_config`, `eks_config`, `eks_config_v2`, `gke_config_v2`, `oke_config`, `k3s_config` and `rke_config` (list maxitems:1)
+* `gke_config_v2` - (Optional) The Google GKE V2 configuration for `gke` Clusters. Conflicts with `aks_config`, `eks_config`, `eks_config_v2`, `gke_config`, `oke_config`, `k3s_config` and `rke_config`. For Rancher v2.5.8 or above (list maxitems:1)
+* `oke_config` - (Optional) The Oracle OKE configuration for `oke` Clusters. Conflicts with `aks_config`, `eks_config`, `eks_config_v2`, `gke_config`, `gke_config_v2`, `k3s_config` and `rke_config` (list maxitems:1)
 * `description` - (Optional) The description for Cluster (string)
 * `cluster_auth_endpoint` - (Optional/Computed) Enabling the [local cluster authorized endpoint](https://rancher.com/docs/rancher/v2.x/en/cluster-provisioning/rke-clusters/options/#local-cluster-auth-endpoint) allows direct communication with the cluster, bypassing the Rancher API proxy. (list maxitems:1)
 * `cluster_monitoring_input` - (Optional) Cluster monitoring config. Any parameter defined in [rancher-monitoring charts](https://github.com/rancher/system-charts/tree/dev/charts/rancher-monitoring) could be configured  (list maxitems:1)
@@ -773,11 +837,29 @@ The following attributes are exported:
 
 ##### Arguments
 
+* `default_backend` - (Optional) Enable ingress default backend. Default: `true` (bool)
 * `dns_policy` - (Optional/Computed) Ingress controller DNS policy. `ClusterFirstWithHostNet`, `ClusterFirst`, `Default`, and `None` are supported. [K8S dns Policy](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pod-s-dns-policy) (string)
 * `extra_args` - (Optional/Computed) Extra arguments for RKE Ingress (map)
+* `http_port` - (Optional/Computed) HTTP port for RKE Ingress (int)
+* `https_port` - (Optional/Computed) HTTPS port for RKE Ingress (int)
+* `network_mode` - (Optional/Computed) Network mode for RKE Ingress (string)
 * `node_selector` - (Optional/Computed) Node selector for RKE Ingress (map)
 * `options` - (Optional/Computed) RKE options for Ingress (map)
 * `provider` - (Optional/Computed) Provider for RKE Ingress (string)
+* `update_strategy` - (Optional) RKE ingress update strategy (list Maxitems: 1)
+
+##### `update_strategy`
+
+###### Arguments
+
+* `rolling_update` - (Optional) Monitoring daemon set rolling update (list Maxitems: 1)
+* `strategy` - (Optional) Monitoring daemon set update strategy (string)
+
+###### `rolling_update`
+
+###### Arguments
+
+* `max_unavailable` - (Optional) Monitoring deployment rolling update max unavailable. Default: `1` (int)
 
 #### `monitoring`
 
@@ -1030,6 +1112,24 @@ The following attributes are exported:
 * `ignore_daemon_sets` - Ignore RKE daemon sets. Default: `true` (bool)
 * `timeout` - RKE node drain timeout. Default: `60` (int)
 
+### `rke2_config`
+
+#### Arguments
+
+The following arguments are supported:
+
+* `upgrade_strategy` - (Optional/Computed) RKE2 upgrade strategy (List maxitems: 1)
+* `version` - (Optional/Computed) RKE2 kubernetes version (string)
+
+#### `upgrade_strategy`
+
+##### Arguments
+
+* `drain_server_nodes` - (Optional) Drain server nodes. Default: `false` (bool)
+* `drain_worker_nodes` - (Optional) Drain worker nodes. Default: `false` (bool)
+* `server_concurrency` - (Optional) Server concurrency. Default: `1` (int)
+* `worker_concurrency` - (Optional) Worker concurrency. Default: `1` (int)
+
 ### `k3s_config`
 
 #### Arguments
@@ -1131,11 +1231,11 @@ The following arguments are supported:
 * `kubernetes_version` - (Optional/Computed) The EKS cluster kubernetes version. Required to create a new cluster (string)
 * `logging_types` - (Optional) The AWS cloudwatch logging types. `audit`, `api`, `scheduler`, `controllerManager` and `authenticator` values are allowed (list)
 * `node_groups` - (Optional/Computed) The EKS cluster name to import. Required to create a new cluster (list)
-* `private_access` - (Optional) The EKS cluster has private access. Default: `false` (bool)
-* `public_access` - (Optional) The EKS cluster has public access. Default: `true` (bool)
+* `private_access` - (Optional/Computed) The EKS cluster has private access (bool)
+* `public_access` - (Optional/Computed) The EKS cluster has public access (bool)
 * `public_access_sources` - (Optional) The EKS cluster public access sources (map)
 * `region` - (Optional) The EKS cluster region. Default: `us-west-2` (string)
-* `secrets_encryption` - (Optional) Enable EKS cluster secret encryption. Default: `false` (bool)
+* `secrets_encryption` - (Optional/Computed) Enable EKS cluster secret encryption (bool)
 * `security_groups` - (Optional/Computed) List of security groups to use for the cluster (list)
 * `service_role` - (Optional) The AWS service role to use (string)
 * `subnets` - (Optional) List of subnets in the virtual network to use (list)
@@ -1234,6 +1334,126 @@ The following arguments are supported:
 * `taints` - (Required) List of Kubernetes taints to be applied to each node (list)
 * `zone` - (Optional) GKE cluster zone. Conflicts with `region` (string)
 
+### `gke_config_v2`
+
+#### Arguments
+
+* `name` - (Required/ForceNew) The GKE ip v4 cidr block (string)
+* `google_credential_secret` - (Required/Sensitive) Google credential secret (string)
+* `project_id` - (Required/ForceNew) The GKE cluster project id (string)
+* `cluster_ipv4_cidr_block` - (Optional/Computed/ForceNew) The GKE ip v4 cidr block (string)
+* `cluster_addons` - (Optional/Computed) The GKE cluster addons (List maxitems:1)
+* `description` - (Optional/Computed/ForceNew) The GKE cluster addons (string)
+* `enable_kubernetes_alpha` - (Optional/Computed/ForceNew) Enable Kubernetes alpha. Default: `false` (bool)
+* `ip_allocation_policy` - (Optional/Computed/ForceNew) The GKE ip allocation policy (List maxitems:1)
+* `imported` - (Optional/ForceNew) Is GKE cluster imported? Default: `false` (bool)
+* `kubernetes_version` - (Optional/Computed) The kubernetes master version. Required for create new cluster (string)
+* `labels` - (Optional/Computed) The GKE cluster labels (map)
+* `locations` - (Optional/Computed) The GKE cluster locations (List)
+* `logging_service` - (Optional/Computed) The GKE cluster logging service (string)
+* `maintenance_window` - (Optional/Computed) The GKE cluster maintenance window (string)
+* `master_authorized_networks_config` - (Optional/Computed/ForceNew) The GKE cluster master authorized networks config (List maxitems:1)
+* `monitoring_service` - (Optional/Computed) The GKE cluster monitoring service (string)
+* `network` - (Optional/Computed/ForceNew) The GKE cluster network. Required for create new cluster (string)
+* `network_policy_enabled` - (Optional/Computed) Is GKE cluster network policy enabled? Default: `false` (bool)
+* `node_pools` - (Optional/Computed) The GKE cluster node pools. Required for create new cluster (List)
+* `private_cluster_config` - (Optional/Computed/ForceNew) The GKE private cluster config (List maxitems:1)
+* `region` - (Optional/Computed/ForceNew) The GKE cluster region. Required if `zone` not set (string)
+* `subnetwork` - (Optional/Computed/ForceNew) The GKE cluster subnetwork. Required for create new cluster (string)
+* `zone` - (Optional/Computed/ForceNew) The GKE cluster zone. Required if `region` not set (string)
+
+#### `cluster_addons`
+
+##### Arguments
+
+* `http_load_balancing` - (Optional/Computed) Enable GKE HTTP load balancing. Default: `false` (bool)
+* `horizontal_pod_autoscaling` - (Optional/Computed) Enable GKE horizontal pod autoscaling. Default: `false` (bool)
+* `network_policy_config` - (Optional/Computed) Enable GKE network policy config. Default: `false` (bool)
+
+#### `ip_allocation_policy`
+
+##### Arguments
+
+* `cluster_ipv4_cidr_block` - (Optional/Computed) The GKE cluster ip v4 allocation cidr block (string)
+* `cluster_secondary_range_name` - (Optional/Computed) The GKE cluster ip v4 allocation secondary range name(string)
+* `create_subnetwork` - (Optional/Computed) Create GKE subnetwork? Default: `false` (bool)
+* `node_ipv4_cidr_block` - (Optional/Computed) The GKE node ip v4 allocation cidr block (string)
+* `services_ipv4_cidr_block` - (Optional/Computed) The GKE services ip v4 allocation cidr block (string)
+* `services_secondary_range_name` - (Optional/Computed) The GKE services ip v4 allocation secondary range name (string)
+* `subnetwork_name` - (Optional/Computed) The GKE cluster subnetwork name (string)
+* `use_ip_aliases` - (Optional/Computed) Use GKE ip aliases? Default: `true` (bool)
+
+#### `master_authorized_networks_config`
+
+##### Arguments
+
+* `cidr_blocks` - (Required) The GKE master authorized network config cidr blocks (List)
+* `enabled` - (Optional) Enable GKE master authorized network config Default: `false` (bool)
+
+##### `cidr_blocks`
+
+###### Arguments
+
+* `cidr_block` - (Required) The GKE master authorized network config cidr block (string)
+* `display_name` - (Optional) The GKE master authorized network config cidr block dispaly name (string)
+
+#### `node_pools`
+
+##### Arguments
+
+* `name` - (Required) The GKE node pool config name (string)
+* `initial_node_count` - (Required) The GKE node pool config initial node count (int)
+* `version` - (Required) The GKE node pool config version. Required for create new cluster (string)
+* `autoscaling` - (Optional/computed) The GKE node pool config autoscaling (List maxitems:1)
+* `config` - (Optional/Computed/ForceNew) The GKE node pool node config (List maxitems:1)
+* `management` - (Optional/Computed) The GKE node pool config management (List maxitems:1)
+* `max_pods_constraint` - (Optional/Computed) The GKE node pool config max pods constraint. Required for create new cluster if `ip_allocation_policy.use_ip_aliases = true` (int)
+
+##### `autoscaling`
+
+###### Arguments
+
+* `enabled` - (Optional) Enable GKE node pool config autoscaling. Default: `false` (bool)
+* `max_node_count` - (Optional/Computed) The GKE node pool config max node count (int)
+* `min_node_count` - (Optional/Computed) The GKE node pool config min node count (int)
+
+##### `config`
+
+###### Arguments
+
+* `disk_size_gb` - (Optional/Computed) The GKE node config disk size Gb (int)
+* `disk_type` - (Optional/Computed) The GKE node config disk type (string)
+* `image_type` - (Optional/Computed) The GKE node config image type (string)
+* `labels` - (Optional/Computed) The GKE node config labels (map)
+* `local_ssd_count` - (Optional/Computed) The GKE node config local ssd count (int)
+* `machine_type` - (Optional/Computed) The GKE node config machine type (string)
+* `oauth_scopes` - (Optional) The GKE node config oauth scopes (List)
+* `preemptible` - (Optional) Enable GKE node config preemptible. Default: `false` (bool)
+* `taints` - (Optional) The GKE node config taints (List)
+
+###### `taints`
+
+####### Arguments
+
+* `key` - (Required) The GKE taint key (string)
+* `value` - (Required) The GKE taint value (string)
+* `effect` - (Required) The GKE taint effect (string)
+
+##### `management`
+
+###### Arguments
+
+* `auto_repair` - (Optional/Computed) Enable GKE node pool config management auto repair. Default: `false` (bool)
+* `auto_upgrade` - (Optional/Computed) Enable GKE node pool config management auto upgrade. Default: `false` (bool)
+
+#### `private_cluster_config`
+
+##### Arguments
+
+* `master_ipv4_cidr_block` - (Required) The GKE cluster private master ip v4 cidr block (string)
+* `enable_private_endpoint` - (Optional) Enable GKE cluster private endpoint. Default: `false` (bool)
+* `enable_private_nodes` - (Optional) Enable GKE cluster private endpoint. Default: `false` (bool)
+
 ### `oke_config`
 
 #### Arguments
@@ -1248,6 +1468,7 @@ The following arguments are supported:
 * `fingerprint` - (Required) The fingerprint corresponding to the specified user's private API Key (string)
 * `flex_ocpus` - (Optional) Specifies number of OCPUs for nodes (requires flexible shape specified with `node_shape`) (int)
 * `kubernetes_version` - (Required) The Kubernetes version that will be used for your master *and* OKE worker nodes (string)
+* `limit_node_count` - (Optional) The maximum number of worker nodes. Can limit `quantity_per_subnet`. Default `0` (no limit) (int)
 * `load_balancer_subnet_name_1` - (Optional) The name of the first existing subnet to use for Kubernetes services / LB. `vcn_name` is also required when specifying an existing subnet. (string)
 * `load_balancer_subnet_name_2` - (Optional) The name of a second existing subnet to use for Kubernetes services / LB. A second subnet is only required when it is AD-specific (non-regional) (string)
 * `node_image` - (Required) The Oracle Linux OS image name to use for the OKE node(s). See [here](https://docs.cloud.oracle.com/en-us/iaas/images/) for a list of images. (string)

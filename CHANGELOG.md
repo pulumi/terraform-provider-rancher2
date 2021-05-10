@@ -1,3 +1,33 @@
+## 1.14.0 (May 7, 2021)
+
+FEATURES:
+
+* **New Argument:** `rancher2_cluster.oke_config.limit_node_count` - (Optional) The maximum number of worker nodes. Can limit `quantity_per_subnet`. Default `0` (no limit) (int)
+* **New Argument:** `rancher2_cluster.rke_config.ingress.default_backend` - (Optional) Enable ingress default backend. Default: `true` (bool)
+* **New Argument:** `rancher2_cluster.rke_config.ingress.http_port` - (Optional/Computed) HTTP port for RKE Ingress (int)
+* **New Argument:** `rancher2_cluster.rke_config.ingress.https_port` - (Optional/Computed) HTTPS port for RKE Ingress (int)
+* **New Argument:** `rancher2_cluster.rke_config.ingress.network_mode` - (Optional/Computed) Network mode for RKE Ingress (string)
+* **New Argument:** `rancher2_cluster.rke_config.ingress.update_strategy` - (Optional) RKE ingress update strategy (list Maxitems: 1)
+* **New Argument:** `rancher2_cluster.rke2_config` - (Optional/Computed) The RKE2 configuration for `rke2` Clusters. Conflicts with `aks_config`, `eks_config`, `gke_config`, `oke_config`, `k3s_config` and `rke_config` (list maxitems:1)
+* **New Argument:** `rancher2_cluster_sync.wait_alerting` - (Optional) Wait until alerting is up and running. Default: `false` (bool)
+* **New Argument:** `rancher2_cluster.gke_config_v2` - (Optional) The Google GKE V2 configuration for `gke` Clusters. Conflicts with `aks_config`, `eks_config`, `eks_config_v2`, `gke_config`, `oke_config`, `k3s_config` and `rke_config`. For Rancher v2.5.8 or above (list maxitems:1)
+* **New Argument:** `rancher2_cloud_credential.google_credential_config` - (Optional) Google config for the Cloud Credential (list maxitems:1)
+
+ENHANCEMENTS:
+
+* Updated `rancher2_catalog_v2` schema resource, defining conflict between `git_repo` and `url` arguments
+* Improved `rancher2_cluster_sync` with new cluster state check method and new option to wait until alerting is enabled
+* Updated go mod to support Rancher `v2.5.8`
+* Updated acceptance tests to use Rancher `v2.5.8`
+
+BUG FIXES:
+
+* Fix `rancher2_node_pool` resource, adding `forcenew` property to not updatable arguments
+* Fix `rancher2_cluster` resource, fixing provider crash if `cluster_monitoring_input` argument is deleted
+* Fix `rancher2_project` resource, fixing provider crash if `project_monitoring_input` argument is deleted
+* Fix `rancher2_catalog_v2` resource, just setting default `git_branch` value if `git_repo` is specified
+* Fix `rancher2_cluster.eks_config_v2` argument, setting `private_access`, `public_access` and `secrets_encryption` as computed argument, removing default value
+
 ## 1.13.0 (March 31, 2021)
 
 FEATURES:

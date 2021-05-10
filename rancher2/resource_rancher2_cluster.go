@@ -118,7 +118,7 @@ func resourceRancher2ClusterCreate(d *schema.ResourceData, meta interface{}) err
 		expectedState = "pending"
 	}
 
-	if cluster.Driver == clusterDriverRKE || cluster.Driver == clusterDriverK3S {
+	if cluster.Driver == clusterDriverRKE || cluster.Driver == clusterDriverK3S || cluster.Driver == clusterDriverRKE2 {
 		expectedState = "provisioning"
 	}
 
@@ -129,6 +129,11 @@ func resourceRancher2ClusterCreate(d *schema.ResourceData, meta interface{}) err
 		clusterStr, _ := interfaceToJSON(cluster)
 		clusterMap, _ := jsonToMapInterface(clusterStr)
 		clusterMap["eksConfig"] = fixClusterEKSConfigV2(d.Get("eks_config_v2").([]interface{}), structToMap(cluster.EKSConfig))
+		err = client.APIBaseClient.Create(managementClient.ClusterType, clusterMap, newCluster)
+	} else if cluster.GKEConfig != nil && !cluster.GKEConfig.Imported {
+		clusterStr, _ := interfaceToJSON(cluster)
+		clusterMap, _ := jsonToMapInterface(clusterStr)
+		clusterMap["gkeConfig"] = fixClusterGKEConfigV2(structToMap(cluster.GKEConfig))
 		err = client.APIBaseClient.Create(managementClient.ClusterType, clusterMap, newCluster)
 	} else {
 		err = client.APIBaseClient.Create(managementClient.ClusterType, cluster, newCluster)
@@ -305,6 +310,9 @@ func resourceRancher2ClusterUpdate(d *schema.ResourceData, meta interface{}) err
 			return err
 		}
 		update["googleKubernetesEngineConfig"] = gkeConfig
+	case ToLower(clusterDriverGKEV2):
+		gkeConfig := expandClusterGKEConfigV2(d.Get("gke_config_v2").([]interface{}))
+		update["gke_config"] = gkeConfig
 	case clusterOKEKind:
 		okeConfig, err := expandClusterOKEConfig(d.Get("oke_config").([]interface{}), d.Get("name").(string))
 		if err != nil {
@@ -319,6 +327,8 @@ func resourceRancher2ClusterUpdate(d *schema.ResourceData, meta interface{}) err
 		update["rancherKubernetesEngineConfig"] = rkeConfig
 	case clusterDriverK3S:
 		update["k3sConfig"] = expandClusterK3SConfig(d.Get("k3s_config").([]interface{}))
+	case clusterDriverRKE2:
+		update["rke2Config"] = expandClusterRKE2Config(d.Get("rke2_config").([]interface{}))
 	}
 
 	newCluster := &Cluster{}
@@ -367,20 +377,27 @@ func resourceRancher2ClusterUpdate(d *schema.ResourceData, meta interface{}) err
 					old, new := d.GetChange("cluster_monitoring_input")
 					oldInput := old.([]interface{})
 					oldInputLen := len(oldInput)
-					newInput := new.([]interface{})
-					newInputLen := len(newInput)
-					monitorVersionChanged = (oldInputLen != newInputLen)
-					if newInputLen > 0 && !monitorVersionChanged {
+					oldVersion := ""
+					if oldInputLen > 0 {
 						oldRow, oldOK := oldInput[0].(map[string]interface{})
-						newRow, newOK := newInput[0].(map[string]interface{})
-						if oldOK && newOK {
-							if oldRow["version"] != newRow["version"] {
-								monitorVersionChanged = true
-							}
+						if oldOK {
+							oldVersion = oldRow["version"].(string)
 						}
 					}
+					newInput := new.([]interface{})
+					newInputLen := len(newInput)
+					newVersion := ""
+					if newInputLen > 0 {
+						newRow, newOK := newInput[0].(map[string]interface{})
+						if newOK {
+							newVersion = newRow["version"].(string)
+						}
+					}
+					if oldVersion != newVersion {
+						monitorVersionChanged = true
+					}
 				}
-				if monitorVersionChanged {
+				if monitorVersionChanged && monitoringInput != nil {
 					err = updateClusterMonitoringApps(meta, d.Get("system_project_id").(string), monitoringInput.Version)
 					if err != nil {
 						return err

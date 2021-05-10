@@ -49,18 +49,9 @@ func resourceRancher2ProjectCreate(d *schema.ResourceData, meta interface{}) err
 		if v, ok := d.Get("wait_for_cluster").(bool); ok && !v {
 			return fmt.Errorf("[ERROR] Creating Project: Cluster ID %s is not active", project.ClusterID)
 		}
-
-		stateCluster := &resource.StateChangeConf{
-			Pending:    []string{},
-			Target:     []string{"active"},
-			Refresh:    clusterStateRefreshFunc(client, project.ClusterID),
-			Timeout:    d.Timeout(schema.TimeoutCreate),
-			Delay:      1 * time.Second,
-			MinTimeout: 3 * time.Second,
-		}
-		_, waitClusterErr := stateCluster.WaitForState()
-		if waitClusterErr != nil {
-			return fmt.Errorf("[ERROR] waiting for cluster ID (%s) to be active: %s", project.ClusterID, waitClusterErr)
+		_, err := meta.(*Config).WaitForClusterState(project.ClusterID, clusterActiveCondition, d.Timeout(schema.TimeoutCreate))
+		if err != nil {
+			return fmt.Errorf("[ERROR] waiting for cluster ID (%s) to be active: %s", project.ClusterID, err)
 		}
 	}
 
@@ -225,20 +216,27 @@ func resourceRancher2ProjectUpdate(d *schema.ResourceData, meta interface{}) err
 					old, new := d.GetChange("project_monitoring_input")
 					oldInput := old.([]interface{})
 					oldInputLen := len(oldInput)
-					newInput := new.([]interface{})
-					newInputLen := len(newInput)
-					monitorVersionChanged = (oldInputLen != newInputLen)
-					if newInputLen > 0 && !monitorVersionChanged {
+					oldVersion := ""
+					if oldInputLen > 0 {
 						oldRow, oldOK := oldInput[0].(map[string]interface{})
-						newRow, newOK := newInput[0].(map[string]interface{})
-						if oldOK && newOK {
-							if oldRow["version"] != newRow["version"] {
-								monitorVersionChanged = true
-							}
+						if oldOK {
+							oldVersion = oldRow["version"].(string)
 						}
 					}
+					newInput := new.([]interface{})
+					newInputLen := len(newInput)
+					newVersion := ""
+					if newInputLen > 0 {
+						newRow, newOK := newInput[0].(map[string]interface{})
+						if newOK {
+							newVersion = newRow["version"].(string)
+						}
+					}
+					if oldVersion != newVersion {
+						monitorVersionChanged = true
+					}
 				}
-				if monitorVersionChanged {
+				if monitorVersionChanged && monitoringInput != nil {
 					err = updateProjectMonitoringApps(meta, newProject.ID, monitoringInput.Version)
 					if err != nil {
 						return err

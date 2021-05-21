@@ -505,6 +505,7 @@ resource "rancher2_cluster" "foo" {
 The following arguments are supported:
 
 * `name` - (Required) The name of the Cluster (string)
+* `agent_env_vars` - (Optional) Optional Agent Env Vars for Rancher agent. Just for Rancher v2.5.6 and above (list)
 * `rke_config` - (Optional/Computed) The RKE configuration for `rke` Clusters. Conflicts with `aks_config`, `eks_config`, `eks_config_v2`, `gke_config`, `gke_config_v2`, `oke_config` and `k3s_config` (list maxitems:1)
 * `rke2_config` - (Optional/Computed) The RKE2 configuration for `rke2` Clusters. Conflicts with `aks_config`, `eks_config`, `gke_config`, `oke_config`, `k3s_config` and `rke_config` (list maxitems:1)
 * `k3s_config` - (Optional/Computed) The K3S configuration for `k3s` imported Clusters. Conflicts with `aks_config`, `eks_config`, `eks_config_v2`, `gke_config`, `gke_config_v2`, `oke_config` and `rke_config` (list maxitems:1)
@@ -558,7 +559,16 @@ The following attributes are exported:
 
 ## Nested blocks
 
+### `agent_env_vars`
+
+#### Arguments
+
+* `name` - (Required) Rancher agent env var name (string)
+* `value` - (Required) Rancher agent env var value (string)
+
 ### `rke_config`
+
+**Note** `rke_config` works the same as within Rancher GUI; it will not _provision_ hosts when using no `cloud_provider` or when `cloud_provider` is set to custom. It is expected that nodes are registered by having the `node_command` run on each node. Running the `node_command` is outside the scope of this provider. 
 
 #### Arguments
 
@@ -1191,7 +1201,8 @@ The following arguments are supported:
 * `network_policy` - (Optional) Network policy used for building Kubernetes network. Chooses from `calico` (string)
 * `pod_cidr` - (Optional) A CIDR notation IP range from which to assign Kubernetes Pod IPs when \"network plugin\" is specified in \"kubenet\". Default `172.244.0.0/16` (string)
 * `service_cidr` - (Optional) A CIDR notation IP range from which to assign Kubernetes Service cluster IPs. It must not overlap with any Subnet IP ranges. Default `10.0.0.0/16` (string)
-* `tag` - (Optional/Computed) Tags for Kubernetes cluster. For example, foo=bar (map)
+* `tag` - (Deprecated) Use `tags` argument instead as []string
+* `tags` - (Optional/Computed) Tags for Kubernetes cluster. For example, `["foo=bar","bar=foo"]` (list)
 
 ### `eks_config`
 
@@ -1476,11 +1487,13 @@ The following arguments are supported:
 * `node_pool_subnet_name` - (Optional) Name for node pool subnet. Default `nodedns` (string)
 * `node_public_key_contents` - (Optional) The contents of the SSH public key file to use for the nodes (string)
 * `node_shape` - (Required) The shape of the node (determines number of CPUs and  amount of memory on each OKE node) (string)
+* `pod_cidr` - (Optional) A CIDR IP range from which to assign Kubernetes Pod IPs (string)
 * `private_key_contents` - (Required/Sensitive) The private API key file contents for the specified user, in PEM format (string)
 * `private_key_passphrase` - (Optional/Sensitive) The passphrase (if any) of the private key for the OKE cluster (string)
 * `quantity_of_node_subnets` - (Optional) Number of node subnets. Default `1` (int)
 * `quantity_per_subnet` - (Optional) Number of OKE worker nodes in each subnet / availability domain. Default `1` (int)
 * `region` - (Required) The availability domain within the region to host the cluster. See [here](https://docs.cloud.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm) for a list of region names. (string)
+* `service_cidr` - (Optional) A CIDR IP range from which to assign Kubernetes Service IPs (string)
 * `service_dns_domain_name` - (Optional) Name for DNS domain of service subnet. Default `svcdns` (string)
 * `skip_vcn_delete` - (Optional) Specifies whether to skip deleting the virtual cloud network (VCN) on destroy. Default `false` (bool)
 * `tenancy_id` - (Required) The OCID of the tenancy in which to create resources (string)
